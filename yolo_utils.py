@@ -7,11 +7,13 @@ from keras import backend as K
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
+
 def read_classes(classes_path):
     with open(classes_path) as f:
         class_names = f.readlines()
     class_names = [c.strip() for c in class_names]
     return class_names
+
 
 def read_anchors(anchors_path):
     with open(anchors_path) as f:
@@ -19,6 +21,7 @@ def read_anchors(anchors_path):
         anchors = [float(x) for x in anchors.split(',')]
         anchors = np.array(anchors).reshape(-1, 2)
     return anchors
+
 
 def generate_colors(class_names):
     hsv_tuples = [(x / len(class_names), 1., 1.) for x in range(len(class_names))]
@@ -29,6 +32,7 @@ def generate_colors(class_names):
     random.seed(None)  # Reset seed to default.
     return colors
 
+
 def scale_boxes(boxes, image_shape):
     """ Scales the predicted boxes in order to be drawable on the image"""
     height = image_shape[0]
@@ -38,18 +42,34 @@ def scale_boxes(boxes, image_shape):
     boxes = boxes * image_dims
     return boxes
 
+
 def preprocess_image(img_path, model_image_size):
     image_type = imghdr.what(img_path)
     image = Image.open(img_path)
+    image_array = np.array(image, dtype=np.uint8)
+    if len(image_array.shape) < 3:
+        shape = tuple(list(image_array.shape) + [3])
+        expected = np.zeros(shape, dtype=np.uint8)
+        for i in range(3):
+            expected[:, :, i] = image_array
+        image = Image.fromarray(expected)
     resized_image = image.resize(tuple(reversed(model_image_size)), Image.BICUBIC)
     image_data = np.array(resized_image, dtype='float32')
+    if len(image_data.shape) < 3:
+        shape = tuple(list(model_image_size) + [3])
+        expected = np.zeros(shape)
+        for i in range(3):
+            expected[:, :, i] = image_data
+        image_data = expected
     image_data /= 255.
     image_data = np.expand_dims(image_data, 0)  # Add batch dimension.
     return image, image_data
 
+
 def draw_boxes(image, out_scores, out_boxes, out_classes, class_names, colors):
-    
-    font = ImageFont.truetype(font='font/FiraMono-Medium.otf',size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
+
+    font = ImageFont.truetype(font='font/FiraMono-Medium.otf',
+                              size=np.floor(3e-2 * image.size[1] + 0.5).astype('int32'))
     thickness = (image.size[0] + image.size[1]) // 300
 
     for i, c in reversed(list(enumerate(out_classes))):
