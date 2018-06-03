@@ -16,7 +16,9 @@ from keras.models import load_model, Model
 from yolo_utils import read_classes, read_anchors, generate_colors, preprocess_image, draw_boxes, scale_boxes
 from yad2k.models.keras_yolo import yolo_head, yolo_boxes_to_corners, preprocess_true_boxes, yolo_loss, yolo_body
 
-coco = COCO('coco/annotations/instances_val2017.json')
+YEAR = 2017
+IMAGE_PATH = "coco/{0}/images/".format(YEAR)
+coco = COCO('coco/{0}/annotations/instances_val{0}.json'.format(YEAR))
 
 #%matplotlib inline
 
@@ -67,18 +69,19 @@ def yolo_filter_boxes(box_confidence, boxes, box_class_probs, threshold=.6):
 
     return scores, boxes, classes
 
-    with tf.Session() as test_a:
-        box_confidence = tf.random_normal([19, 19, 5, 1], mean=1, stddev=4, seed=1)
-        boxes = tf.random_normal([19, 19, 5, 4], mean=1, stddev=4, seed=1)
-        box_class_probs = tf.random_normal([19, 19, 5, 80], mean=1, stddev=4, seed=1)
-        scores, boxes, classes = yolo_filter_boxes(
-            box_confidence, boxes, box_class_probs, threshold=0.5)
-        """print("scores[2] = " + str(scores[2].eval()))
-        print("boxes[2] = " + str(boxes[2].eval()))
-        print("classes[2] = " + str(classes[2].eval()))
-        print("scores.shape = " + str(scores.shape))
-        print("boxes.shape = " + str(boxes.shape))
-        print("classes.shape = " + str(classes.shape))"""
+
+with tf.Session() as test_a:
+    box_confidence = tf.random_normal([19, 19, 5, 1], mean=1, stddev=4, seed=1)
+    boxes = tf.random_normal([19, 19, 5, 4], mean=1, stddev=4, seed=1)
+    box_class_probs = tf.random_normal([19, 19, 5, 80], mean=1, stddev=4, seed=1)
+    scores, boxes, classes = yolo_filter_boxes(
+        box_confidence, boxes, box_class_probs, threshold=0.5)
+    """print("scores[2] = " + str(scores[2].eval()))
+    print("boxes[2] = " + str(boxes[2].eval()))
+    print("classes[2] = " + str(classes[2].eval()))
+    print("scores.shape = " + str(scores.shape))
+    print("boxes.shape = " + str(boxes.shape))
+    print("classes.shape = " + str(classes.shape))"""
 
 # GRADED FUNCTION: iou
 
@@ -245,7 +248,7 @@ img_ids = coco.getImgIds()
 # print(img_ids)
 anchors = read_anchors("model_data/yolo_anchors.txt")
 image_shape = (720., 1280.)
-yolo_model = load_model("model_data/yolo.h5")
+yolo_model = load_model("model_data/yolo608.h5")
 # yolo_model.summary()
 yolo_model.save('yolo_model.h5')
 yolo_outputs = yolo_head(yolo_model.output, anchors, len(class_names))
@@ -270,16 +273,21 @@ def predict(sess, image_file):
     """
 
     # Preprocess your image
-    image, image_data = preprocess_image("coco/images/" + image_file, model_image_size=(416, 416))
+    image, image_data = preprocess_image(
+        IMAGE_PATH + image_file,
+        model_image_size=(608, 608)
+    )
 
     # Run the session with the correct tensors and choose the correct placeholders in the feed_dict.
     # You'll need to use feed_dict={yolo_model.input: ... , K.learning_phase(): 0})
     # START CODE HERE ### (≈ 1 line)
     out_scores, out_boxes, out_classes = sess.run(
         [scores, boxes, classes],
-        feed_dict={yolo_model.input: image_data,
-                   input_image_shape: [image.size[1], image.size[0]],
-                   K.learning_phase(): 0}
+        feed_dict={
+            yolo_model.input: image_data,
+            input_image_shape: [image.size[1], image.size[0]],
+            K.learning_phase(): 0
+        }
     )
     ### END CODE HERE ###
     # Print predictions info
@@ -314,6 +322,10 @@ for img in imgs:
     print('img_id: ')
     print(img['id'])'''
     for i in range(len(out_scores)):
+        # top, left, bottom, right = box
+        y1, x1, y2, x2 = out_boxes[i]
+        x, y, w, h = x1, y1, x2 - x1, y2 - y1
+        out_boxes[i] = (x, y, w, h)
         result = {
             "image_id": img['id'],
             "category_id": out_classes[i],
@@ -321,7 +333,7 @@ for img in imgs:
             "score": float(out_scores[i])
         }
         results.append(result)
-with open("instances_val2017_results.json", "w") as f:
+with open("yolo_608_test_instances_val2017_results.json", "w") as f:
     json.dump(results, f)
 # print(results)
 
